@@ -15,10 +15,10 @@ class Fetcher
     @sock = TCPSocket.new(uri.host, 443)
     @driver = WebSocket::Driver.client(self)
 
-    @driver.on(:open) { |_| 
+    @driver.on(:open) do |_| 
       @driver.write("155-questions-active")
       #@driver.write("1-review-dashboard-update")
-    }
+    end
 
     @driver.on(:message, &method(:on_post))
 
