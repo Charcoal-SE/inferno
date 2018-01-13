@@ -1,0 +1,11 @@
+# Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
+
+one:
+  bot: one
+  name: MyString
+  conflicts: MyString
+
+two:
+  bot: two
+  name: MyString
+  conflicts: MyString
