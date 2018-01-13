@@ -22,16 +22,23 @@ class Fetcher
 
     @driver.on(:message, &method(:on_post))
 
-    loop do
-      if IO.select([@sock], [], [], 60)
-        @driver.parse(@sock.read(1))
-      else # 60 seconds are up, update post per minute stats
-        ppm_window.unshift
+    Thread.new do
+      loop do
+        sleep(60)
+
+        if ppm_window.size >= 60
+          ppm_wimdow.unshift
+        end
+
         ppm_window.push pending_ppm
 
-        @current_ppm = ppm_window.sum
+        @current_ppm = ppm_window.sum / ppm_window.size
         @pending_ppm = 0
       end
+    end
+
+    loop do
+      @driver.parse(@sock.read(1))
     end
   end
 
@@ -56,6 +63,7 @@ class Fetcher
     key = site + '-posts'
 
     redis.rpush(key, id)
+    @pending_ppm += 1
 
     if redis.llen(key) > @current_ppm / (PostTypes.find(:posts).quota / 1440)
       posts = Set.new redis.lrange(key, 0, -1)
