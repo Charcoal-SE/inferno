@@ -34,7 +34,9 @@ class Chat
       @cookies[bot.id] = cookie
     end
 
-    request = Net::HTTP::Post.new("/chats/#{room_id}/messages/new")
+    fkey = @bots[site].send :get_fkey, site, "/rooms/#{room_id}"
+
+    request = Net::HTTP::Post.new("/chats/#{room_id}/messages/new?fkey=#{fkey}&text=#{URI.encode msg}")
     request['Cookie'] = "sechatusr=#{CGI.encode cookie}"
 
     Net::HTTP.start("chat.#{site}.com", 443) do |http|
