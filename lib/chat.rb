@@ -16,6 +16,8 @@ class Chat
   def join_command_rooms
     @bots.each do |site, bot|
       Room.where(:site => site, :commands => true).each do |room|
+        bot.join_room room.room_id
+
         bot.add_hook room.room_id, 'message' do |msg|
           process_message msg, room
         end
