@@ -2,15 +2,18 @@ class ApplicationController < ActionController::Base
   protected
 
   def get_bot(request)
-    token = params[:token]
+    token = request[:token]
 
     if token
       return Bot.find_by(:token => token)
     else
       user = current_user
-      id = params[:id]
 
-      return Bot.find_by(:id => id, :user => user)
+      if !user
+        return nil
+      end
+
+      return Bot.find_by(:id => request[:id], :user => user)
     end
   end
 end
