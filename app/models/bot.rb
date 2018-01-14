@@ -3,9 +3,9 @@ require 'shellwords'
 class Bot < ApplicationRecord
   belongs_to :user
 
-  has_many :command
-  has_many :feedback_type
-  has_many :subscription
+  has_many :commands
+  has_many :feedback_types
+  has_many :subscriptions
 
   enum scan_method: [:POST, :GET, :WS]
   enum key_type: [:switch, :score]
