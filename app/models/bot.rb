@@ -5,7 +5,7 @@ class Bot < ApplicationRecord
 
   has_many :commands
   has_many :feedback_types
-  has_many :subscriptions
+  has_many :post_types, :through => :subscription
 
   enum scan_method: [:POST, :GET, :WS]
   enum key_type: [:switch, :score]

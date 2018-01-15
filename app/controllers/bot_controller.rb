@@ -1,5 +1,6 @@
 class BotController < ApplicationController
   before_action :authenticate_user!, only: [:create]
+  before_action :check_bot, except: [:create]
 
   public
 
@@ -22,19 +23,13 @@ class BotController < ApplicationController
   end
 
   def update_json
-    bot = get_bot(params)
-
-    if !bot
-      render :text => "Invalid token or ID", :status => 403
-    end
-
     config = JSON.parse request.body.read
 
     if !config
       render :text => "Missing config", :status => 400
     end
 
-    render update_from_config(bot, config)
+    render update_from_config(@bot, config)
   end
 
   private

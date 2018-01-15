@@ -9,7 +9,7 @@ require_relative '../lib/chat'
 require_relative '../lib/fetcher'
 
 module Inferno
-  def self.start_fetcher
+  def self.start_tasks
     ppid = redis.getset("thread_ppid", Process.ppid)
 
     if !ppid || ppid.to_i != Process.ppid
@@ -32,7 +32,7 @@ module Inferno
 end
 
 if defined?(Rails::Server)
-  config.after_initialize do
-    Inferno::start_fetcher
+  Rails.application.config.after_initialize do
+    Inferno::start_tasks
   end
 end

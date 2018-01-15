@@ -1,19 +1,23 @@
 class ApplicationController < ActionController::Base
   protected
 
-  def get_bot(request)
-    token = request[:token]
+  def check_bot
+    token = params[:token]
 
     if token
-      return Bot.find_by(:token => token)
+      @bot = Bot.find_by(:token => token)
     else
       user = current_user
 
       if !user
-        return nil
+        render :text => "Sign in or use secret token", :status => 403
       end
 
-      return Bot.find_by(:id => request[:id], :user => user)
+      @bot = Bot.find_by(:id => params[:id], :user => user)
+    end
+
+    if !@bot
+      render :text => "No such bot", :status => 404
     end
   end
 end
