@@ -310,12 +310,12 @@ This is (obviously) expected to be in the same order as the original `answers` a
 
 ## Quota Allocation
 
-One of the other features of Inferno is that it "splits" up the total API quota (20,000 requests per day) among the various post types. This can be used to give more/less weight to a given type of post.
+One of the other features of Inferno is that it "splits" up the total API quota (10,000 requests per day) among the various post types. This can be used to give more/less weight to a given type of post.
 
 There are two kinds of post types, and their behavior with respect to the quota allocation varies:
 
 - Polling. This is `comments` and `suggested-edits`, where an API route is queried periodically to fetch new content. The API allocation defines how often the route is queried: for instance, if you allocate 1,000 requests per day to `suggested-edits`, then it will query for suggested edits 1/1,000 days/request * 1440 minutes/day = every 1.44 minutes.
 
-- Enqueuing. This is `questions`, `edits`, and `reviews`, where content comes down a websocket. Rather than fetching the post immediately (which would be a massive waste of quota), posts are *enqueued* and then fetched in a batch once the queue gets to a certain size. To calculate this threshold, Inferno keeps a sliding-window average of the current post per minute rate over the past hour *across the network*. If the current posts per minute is, say, 15 posts/minute (not realistic), and the API allocation for the post type is 12,000 requests/day, then it will query the API once the queue *for a given site* reaches ceil(3 posts/minute / (12,000 requests/day / 1440 minutes/day)) = 2 requests enqueued.
+- Enqueuing. This is `questions`, `edits`, and `reviews`, where content comes down a websocket. Rather than fetching the post immediately (which would be a massive waste of quota), posts are *enqueued* and then fetched in a batch once the queue gets to a certain size. To calculate this threshold, Inferno keeps a sliding-window average of the current post per minute rate over the past hour *across the network*. If the current posts per minute is, say, 15 posts/minute (not realistic), and the API allocation for the post type is 6,000 requests/day, then it will query the API once the queue *for a given site* reaches ceil(3 posts/minute / (6,000 requests/day / 1440 minutes/day)) = 4 requests enqueued.
 
 Note that quota allocation is a global setting, not something that is set per bot.
