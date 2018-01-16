@@ -115,7 +115,7 @@ class Fetcher
       sleep(remaining_backoff + 1)
     end
 
-    ids = id.join ';'
+    ids = ids.join ';'
 
     request_uri = "https://api.stackexchange.com/2.2/question/#{ids}?site=#{site}"
                   "&filter=!)E0g*ODaEZ(SgULQhYvCYbu09*ss(bKFdnTrGmGUxnqPptuHP&key=IAkbitmze4B8KpacUfLqkw(("
