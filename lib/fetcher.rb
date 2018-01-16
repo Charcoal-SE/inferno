@@ -95,7 +95,7 @@ class Fetcher
       if items then
         items = items[:-1]
 
-        Subscriptions.where(:post_type => :posts).each do |subscription|
+        Subscription.where(:post_type => :posts).each do |subscription|
           bot = subscription.bot
 
           if redis.getset(bot.id.to_s, 0) == '1'
