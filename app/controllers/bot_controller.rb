@@ -141,9 +141,7 @@ class BotController < ApplicationController
     end
 
     bot.save!
-
-    redis.setbit("api_rebuild", bot.id, 1)
-    redis.setbit("cmd_rebuild", bot.id, 1)
+    redis.set(bot.id.to_s, 1)
 
     return :text => "Bot created with config", :status => 200
   end

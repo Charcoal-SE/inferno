@@ -5,7 +5,6 @@ ruby '2.3.1'
 
 gem 'chatx', gitlab: 'izwick-schachter/ChatX'
 gem 'devise'
-gem 'parallel'
 gem 'websocket-driver'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'

@@ -5,6 +5,9 @@ class Fetcher
   include Singleton
 
   def run
+    @backoff = 0
+    @quota = 0
+
     @current_ppm = 0
     @pending_ppm = 0
 
@@ -54,22 +57,22 @@ class Fetcher
     post = JSON.parse(JSON.parse(post)['data'])
 
     id = post['id']
-    site = post['siteBaseHostAddress']
+    site_name = post['siteBaseHostAddress']
 
-    if id == 3122 && site == 'meta.stackexchange.com'
+    if id == 3122 && site_name == 'meta.stackexchange.com'
       return
     end
 
-    key = site + '-posts'
+    key = site_name + '-posts'
 
-    redis.rpush(key, id)
+    redis.sadd(key, id)
     @pending_ppm += 1
 
-    if redis.llen(key) > @current_ppm / (PostTypes.find(:posts).quota / 1440)
-      posts = Set.new redis.lrange(key, 0, -1)
+    if redis.scard(key) > @current_ppm / (PostTypes.find(:posts).quota / 1440)
+      posts = Set.new redis.smembers(key)
       redis.del(key)
 
-      site = Site.find_or_create_by(:name => name)
+      site = Site.find_or_create_by(:name => site_name)
 
       current_max_id = posts.max
       previous_max_id = site.last_scanned
@@ -87,10 +90,65 @@ class Fetcher
         posts.union (current_max_id - diff .. current_max_id - 1)
       end
 
-      Parallel.each(posts, &:fetch_post)
+      items = fetch_posts(site_name, posts)
+
+      if items then
+        items = items[:-1]
+
+        Subscriptions.where(:post_type => :posts).each do |subscription|
+          bot = subscription.bot
+
+          if redis.getset(bot.id.to_s, 0) == '1'
+            bot.rebuild_interface
+          end
+
+          Bot.bot_interfaces[bot.id].api("#{items[:-1]},'token':#{bot.token}'}")
+        end
+      end
     end
   end
 
-  def fetch_post(id)
+  def fetch_posts(site, ids, json = false)
+    remaining_backoff = @backoff - Time.now.to_i
+
+    if @remaining_backoff > 0 then
+      sleep(remaining_backoff + 1)
+    end
+
+    ids = id.join ';'
+
+    request_uri = "https://api.stackexchange.com/2.2/question/#{ids}?site=#{site}"
+                  "&filter=!)E0g*ODaEZ(SgULQhYvCYbu09*ss(bKFdnTrGmGUxnqPptuHP&key=IAkbitmze4B8KpacUfLqkw(("
+
+    result = Net::HTTP.get(request_uri)
+
+    parsed = JSON.parse result
+
+    if !parsed['items'] then
+      logger.info "No items returned for #{ids}"
+      return nil
+    end
+
+    if parsed['backoff'] then
+      new_backoff = Time.now.to_i + parsed['backoff']
+
+      if new_backoff > @backoff then
+        @backoff = new_backoff
+      end
+    end
+
+    if parsed['error_msg'] then
+      logger.info "API error for #{ids}: #{parsed['error_msg']}"
+
+      if parsed['error_id'] == 502 then
+        @backoff = Time.now.to_i + 11
+      end
+    end
+
+    if parsed['quota_remaining'] then
+      @quota = parsed['quota_remaining']
+    end
+
+    return json ? parsed : result
   end
 end

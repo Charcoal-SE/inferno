@@ -4,21 +4,21 @@ require 'net/http'
 class Chat
   include Singleton
 
+  Servers = ['stackexchange', 'stackoverflow', 'meta.stackexchange']
+
   def initialize
-    @cookies = []
-    @bots = {
-      'stackexchange' => ChatBot.new(ENV['CXUsername'], ENV['CXPassword'], default_server: 'stackexchange'),
-      'stackoverflow' => ChatBot.new(ENV['CXUsername'], ENV['CXPassword'], default_server: 'stackoverflow'),
-      'meta.stackexchange' => ChatBot.new(ENV['CXUsername'], ENV['CXPassword'], default_server: 'meta.stackexchange')
-    }
+    @sessions = []
+    @bot = ChatBot.new(ENV['CXUsername'], ENV['CXPassword'])
   end
 
   def join_command_rooms
-    @bots.each do |site, bot|
-      Room.where(:site => site, :commands => true).each do |room|
-        bot.join_room room.room_id
+    @bot.login(Servers)
 
-        bot.add_hook room.room_id, 'message' do |msg|
+    Servers.each do |site|
+      Room.where(:site => site, :commands => true).each do |room|
+        @bot.join_room room.room_id, server: site
+
+        @bot.add_hook room.room_id, 'message', server: site do |msg|
           process_message msg, room
         end
       end
@@ -29,17 +29,17 @@ class Chat
   end
 
   def send_msg(msg, site, room_id, bot)
-    cookie = @cookies[bot.id]
+    session = @sessions[bot.id]
 
-    if !cookie
-      cookie = Net::HTTP.get(bot.auth_route).body
-      @cookies[bot.id] = cookie
+    if !session
+      session = JSON.parse Net::HTTP.get(bot.auth_route).body
+      @session[bot.id] = session
     end
 
-    fkey = @bots[site].send :get_fkey, site, "/rooms/#{room_id}"
+    creds = session[site]
 
-    request = Net::HTTP::Post.new("/chats/#{room_id}/messages/new?fkey=#{fkey}&text=#{URI.encode msg}")
-    request['Cookie'] = "sechatusr=#{CGI.encode cookie}"
+    request = Net::HTTP::Post.new("/chats/#{room_id}/messages/new?fkey=#{URI.encode creds['fkey']}&text=#{URI.encode msg}")
+    request['Cookie'] = "sechatusr=#{CGI.encode creds['cookie']}"
 
     Net::HTTP.start("chat.#{site}.com", 443) do |http|
       http.request(request)
