@@ -198,7 +198,7 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
 
   - `comments`: This polls the API route `/comments` to retrieve new comments at an allocation-dependent rate (see Allocations). This post type does not support the `"sites": "*"` (all sites) option -- you must specify specific sites.
 
-  - `edits`: This monitors the SE real-time websocket for questions as per `questions`, but if a bumped question or answer was edited, will query the `/posts/{ids}/revisions` route to fetch the latest revision of the post.
+  - `edits`: This monitors the SE real-time websocket for questions as per `questions`, but if a bumped question or answer was edited, it will query the `/posts/{ids}/revisions` route to fetch the latest revision of the post.
 
   - `suggested-edits`: This polls the API route `/suggested-edits` to retrieve new suggested edits at an allocation-dependent rate. This post type does not support the `"sites": "*"` (all sites) option -- you must specify specific sites. Note that many use cases for this post type can also be fulfilled by the `reviews` post type, such as EditMonitor's "accepted by OP with a reject vote" or "1 accept vote and 1 reject vote" -- this should only be used if you need the content of the suggested edit as soon as it is made.
 
@@ -260,13 +260,13 @@ This is (obviously) expected to be in the same order as the original `answers` a
 
 - `feedbacks.<feedback>.type`: Required. Defines the semantics of the feedback:
 
-  - "true": A true positive. This is the only type of feedback that will count as a hit for the reason's accuracy. Conflicts with `false`.
-  - "false": A false positive. If the post was autoflagged, this will trigger a chat warning. Conflicts with `true`.
-  - "neutral": Anything else (e.g. SmokeDetector's NAA, Natty's needs edit, ...). This won't cause a warning if the post was autoflagged, nor will it conflict with any other feedbacks.
+  - `"true"`: A true positive. This is the only type of feedback that will count as a hit for the reason's accuracy. Conflicts with `"false"`.
+  - `"false"`: A false positive. If the post was autoflagged, this will trigger a chat warning. Conflicts with `"true"`.
+  - `"neutral"`: Anything else (e.g. SmokeDetector's NAA, Natty's needs edit, ...). This won't cause a warning if the post was autoflagged, nor will it conflict with any other feedbacks.
 
 - `feedbacks.<feedback>.blacklist`: Optional, defaults to `false`. Defines whether the feedback affects the user blacklist. If this is `true`, and *the feedback type* is not `"false"`, then the user who created the post will be added to the blacklist. This means that *any* content they produce will automatically be reported with the reason `Blacklisted user`, regardless of what your bot classifies it as. Note that the post will *still be sent to your bot*, and any information from the scan will be available to the templates (e.g. any additional reasons). If *the feedback type* is of type `"false"`, then this feedback will remove the user from the user blacklist instead.
 
-- `commands`: A dictionary defining the commands that this bot accepts. For reply commands, the name of the key should be a prefix *after* the reply ping (:<numbers>) is stripped. For prefix commands, the key will be a prefix of the entire message. This means that for commands that just involve pinging the bot (not replying to it), you need to include the ping e.g. `@Natty alive`. If you want to allow for a shorter prefix, you can use aliases (e.g. `@nat alive`).
+- `commands`: A dictionary defining the commands that this bot accepts. For reply commands, the name of the key should be a prefix *after* the reply ping (`:<numbers>`) is stripped. For prefix commands, the key will be a prefix of the entire message. This means that for commands that just involve pinging the bot (not replying to it), you need to include the ping e.g. `@Natty alive`. If you want to allow for a shorter prefix, you can use aliases (e.g. `@nat alive`).
 
 - `commands.<command>.type`: Reqiured. Defines the behavior of the command:
   - `"static"`: Replies to the command with the string contained in `"data"`. This is for commands such as `alive` or simple joke commands like `!!/lick`.
