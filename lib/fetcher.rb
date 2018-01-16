@@ -102,7 +102,7 @@ class Fetcher
             bot.rebuild_interface
           end
 
-          Bot.bot_interfaces[bot.id].api("#{items[:-1]},'token':#{bot.token}'}")
+          Bot.bot_interfaces[bot.id].api("#{items[:-1]},'token':'#{bot.token}'}")
         end
       end
     end
