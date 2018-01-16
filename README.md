@@ -2,7 +2,7 @@
 
 Inferno is a WIP centralized server for managing StackExchange bots. It listens and fetches new or updated SE content (posts, comments, edits...), dispatches HTTP requests to subscribed bots for scanning, posts reports to chat and to the web dashboard using bot-specified templates, and handles chat commands for the bots.
 
-At its core, Inferno is intended to abstract out the chat and API monitoring concerns, so as to provide a way for bots to isolate their post scanning logic and host it in a serverless environment (such as AWS Lambdas) where it can be called as needed to scan posts. Similar to the previous [apicache](https://github.com/SOBotics/apicache), this also cuts down on overall calls since Inferno will retrieve content only once and dispatch it to all subscribers (in addition, this will also leverage Charcoal's doubled API quota key).
+At its core, Inferno is intended to abstract out the chat and API monitoring concerns, so as to provide a way for bots to isolate their post scanning logic and host it in a serverless environment (such as AWS Lambdas) where it can be called as needed to scan posts. Similar to the previous [apicache](https://github.com/SOBotics/apicache), this also cuts down on overall calls since Inferno will retrieve content only once and dispatch it to all subscribers.
 
 ## Bot Interface
 
