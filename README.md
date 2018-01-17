@@ -280,6 +280,7 @@ This is (obviously) expected to be in the same order as the original `answers` a
   - `"static"`: Replies to the command with the string contained in `"data"`. This is for commands such as `alive` or simple joke commands like `!!/lick`.
 
   - `"remote"`: Sends the message as a JSON POST request to the URI contained in `"data"`, and replies with the body of the response (in plain text):
+    - `alias_used` will contain the full name of how the command was invoked (not how the command was defined, in case of aliases).
     - If the command has a max arity of 1, the key `args` will contain an array with one string containing everything in the message after the command name.
     - Otherwise, the arguments will be split on spaces like usual and stored in `args`.
     - The full message data of the message containing the command will be stored in `msg_id`, `msg_content`, `msg_timestamp` `msg_user_id`, `msg_user_name`, `room_host`, `users_in_room`.
@@ -287,7 +288,7 @@ This is (obviously) expected to be in the same order as the original `answers` a
     - If the reply command is replying to a report, all of keys in the API response and your bot's response will be available.
 
   - `"local"`: Renders the Handlebars template contained in `"data"`. The following parameters and helpers will be available to it:
-    - `{{[alias_used]}}` will contain the full name of how the command was invoked (not how the command was defined, in case of aliases).
+    - `{{alias_used}}` will contain the full name of how the command was invoked (not how the command was defined, in case of aliases).
     - If the command has a max arity of 1, everything in the message after the command name will be stored in `{{[1]}}`.
     - Otherwise, the arguments will be split on spaces like usual and stored in `{{[1]}}`, `{{[2]}}`, ...
     - The full message data of the message containing the command will be stored in `{{msg_id}}`, `{{msg_content}}`, `{{msg_timestamp}}` `{{msg_user_id}}`, `{{msg_user_name}}`, `{{room_host}}`, `{{users_in_room}}`
