@@ -300,8 +300,8 @@ This is (obviously) expected to be in the same order as the original `answers` a
       - `sub <regex> <replacement> <string>`
       - `delete <msg_id>`
       - `promote <user_id>`
-      - `unfeedbacked` (returns list of IDs)
-      - `posts_by_tag <tag name> <count>`
+      - `unfeedbacked` (returns list of response_datas from Report model)
+      - `posts_by_tag <tag name> <count>`
       - `posts_between <timestamp 1> <timestamp 2>`
       - `last_posts <count>`
       - `random_choice <array>`
