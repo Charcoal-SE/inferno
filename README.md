@@ -113,7 +113,7 @@ To indicate that one or more *answers on the question* should be reported, the r
 
 Each of these classifications should be in the index where the corresponding answer was. Answers are not sent in separate requests -- instead, you get a request containing questions and their answers. This cuts down on the number of times your lambda is called.
 
-In addition to these two critical routes, you may also want to create one or more routes to handle remote chat commands (see `commands` in Bot Configuration). The request structure for these hasn't been designed yet, but they're expected to return plain text Markdown that will be posted as a reply to the command.
+In addition to these two critical routes, you may also want to create one or more routes to handle remote chat commands. See `commands` in Bot Configuration for information on that.
 
 ## Bot Configuration
 
@@ -163,6 +163,9 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
         "<name of command>": {
             "type": "static|local|remote",
             "reply": true|false,
+            "privileged": true|false,
+            "min_arity": 0,
+            "max_arity": 0,
             "data": "..."
         },
         ...
@@ -176,6 +179,11 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
                 "delay": true|false,
                 "delete_fp": true|false
                 "deletionwatcher": true|false,
+                
+                "privileges": [
+                    <user id>,
+                    ...
+                ]
 
                 "conditions": {
                     "<key>": {
@@ -248,9 +256,9 @@ This is (obviously) expected to be in the same order as the original `answers` a
 
 - `types.<type>.query.templates`: A dictionary containing the templates for formatting the reports.
 
-- `types.<type>.query.templates.chat`: Required. A format string defining how your bot's chat message reports will appear: `"%{key} ... %{another key} asdf."` The format string can reference keys contained in either the API response (e.g. `link`), your bot's response (e.g. `reasons`) or a few special ones (e.g. `ms_link` for the dashboard entry). For answers, the "API response" will specifically be the corresponding entry under the `answers` array, not the API response of the question.
+- `types.<type>.query.templates.chat`: Required. A Handlebars template defining how your bot's chat message reports will appear. The format string can reference keys contained in either the API response (e.g. `{{link}}`), your bot's response (e.g. `{{reasons}}`) or a few special ones (e.g. `{{ms_link}}` for the dashboard entry). For answers, the "API response" will specifically be the corresponding entry under the `answers` array, not the API response of the question.
 
-- `types.<type>.query.templates.web`: Optional. A Handlebars template that will be rendered whenever someone views the post on the dashboard. All of the keys available to the chat template will also be available.
+- `types.<type>.query.templates.web`: Optional. A Handlebars template that will be rendered whenever someone views the post on the dashboard. All of the keys available to the chat template will also be available. Additionally, a few other keys will be available, such as `{{autoflaggers}}` (list of names) and `{{reason_accuracies}}` (mapping reason names to their accuracies). List is subject to change.
 
 - `feedbacks`: A dictionary defining the feedbacks this bot accepts, whether from chat or from a userscript. The name of each key should be the name of the corresponding feedback, without any modifiers at the end (e.g. `tp`, not `tpu-`).
 
@@ -271,23 +279,55 @@ This is (obviously) expected to be in the same order as the original `answers` a
 - `commands.<command>.type`: Reqiured. Defines the behavior of the command:
   - `"static"`: Replies to the command with the string contained in `"data"`. This is for commands such as `alive` or simple joke commands like `!!/lick`.
 
-  - `"remote"`: Sends the message as a POST request to the URI contained in `"data"`, and replies with the body of the response (in plain text).
+  - `"remote"`: Sends the message as a JSON POST request to the URI contained in `"data"`, and replies with the body of the response (in plain text):
+    - If the command has a max arity of 1, the key `args` will contain an array with one string containing everything in the message after the command name.
+    - Otherwise, the arguments will be split on spaces like usual and stored in `args`.
+    - The full message data of the message containing the command will be stored in `msg_id`, `msg_content`, `msg_timestamp` `msg_user_id`, `msg_user_name`, `room_host`, `users_in_room`.
+    - If the command is a reply command, the message data for the parent message will be stored in `parent_id`, `parent_content`, `parent_timestamp`.
+    - If the reply command is replying to a report, all of keys in the API response and your bot's response will be available.
 
-  - `"local"`: not designed yet
+  - `"local"`: Renders the Handlebars template contained in `"data"`. The following parameters and helpers will be available to it:
+    - `{{[alias_used]}}` will contain the full name of how the command was invoked (not how the command was defined, in case of aliases).
+    - If the command has a max arity of 1, everything in the message after the command name will be stored in `{{[1]}}`.
+    - Otherwise, the arguments will be split on spaces like usual and stored in `{{[1]}}`, `{{[2]}}`, ...
+    - The full message data of the message containing the command will be stored in `{{msg_id}}`, `{{msg_content}}`, `{{msg_timestamp}}` `{{msg_user_id}}`, `{{msg_user_name}}`, `{{room_host}}`, `{{users_in_room}}`
+    - If the command is a reply command, the message data for the parent message will be stored in `{{parent_id}}`, `{{parent_content}}`, `{{parent_timestamp}}`.
+    - If the reply command is replying to a report, all of keys in the API response and your bot's response will be available (like the chat report template). Additionally, a few other keys will be available, such as `{{autoflaggers}}` (list of names) and `{{reason_accuracies}}` (mapping reason names to their accuracies). List is subject to change.
+    - The following assorted helpers will be available:
+      - `join <array> <delimiter>`
+      - `match <regex> <string>` (returns list of captures)
+      - `sub <regex> <replacement> <string>`
+      - `delete <msg_id>`
+      - `promote <user_id>`
+      - `unfeedbacked` (returns list of IDs)
+      - `posts_by_tag <tag name> <count>`
+      - `posts_between <timestamp 1> <timestamp 2>`
+      - `last_posts <count>`
+      - `random_choice <array>`
+      - `sum <array>`
+      - `add <1> <2>`
+      - `minus <1> <2>`
+      - `mul <1> <2>`
+      - `div <1> <2>`
+    
 
 - `commands.<command>.reply`: If this is `true`, then the command is invoked by replying to one of the bot's messages. The parent message will be included along with the message containing the command itself. Defaults to `false`.
+
+- `commands.<command>.privileged`: If this is `true`, only users with privileges in the current room can invoke this command.
 
 - `commands.<command>.data`: A string. What it contains depends on the type of command.
 
 - `rooms`: A dictionary defining the rooms this bot listens in. This should map the chat host `stackexchange|stackoverflow|meta.stackexchange` to dictionaries that then have the room IDs as keys.
 
-- `rooms.<host>.<room>.commands`: If this is `true`, then Inferno will listen for chat commands in this room. If this is `false`, then only reports will be posted here (commands will not be listened for at all).
+- `rooms.<host>.<room>.commands`: Optional, defaults to false. If this is `true`, then Inferno will listen for chat commands in this room. If this is `false`, then only reports will be posted here (commands will not be listened for at all).
 
-- `rooms.<host>.<room>.delay`: If this is `true`, then Inferno will wait 5 minutes before posting a report to this room. You're expected to do this as a courtesy if you run your bot in the Meta Tavern.
+- `rooms.<host>.<room>.delay`: Optional, defaults to false. If this is `true`, then Inferno will wait 5 minutes before posting a report to this room. You're expected to do this as a courtesy if you run your bot in the Meta Tavern.
 
-- `rooms.<host>.<room>.delete_fp`: If this is `true`, then Inferno will delete reports that are marked as false positives within the message deletion window (2 minutes).
+- `rooms.<host>.<room>.delete_fp`: Optional, defaults to false. If this is `true`, then Inferno will delete reports that are marked as false positives within the message deletion window (2 minutes).
 
-- `rooms.<host>.<room>.deletionwatcher`: If this is `true`, Inferno will listen for when the post reported is deleted and delete the corresponding chat message within the message deletion window (2 minutes).
+- `rooms.<host>.<room>.deletionwatcher`: Optional, defaults to false. If this is `true`, Inferno will listen for when the post reported is deleted and delete the corresponding chat message within the message deletion window (2 minutes).
+
+- `rooms.<host>.<room>.privileges`: Optional. Contains an array of user IDs that can execute privileged commands.
 
 - `rooms.<host>.<room>.conditions`: This is a dictionary defining the conditions under which a post will be reported to this room. The keys represent keys in either the API or bot response (as with the chat template), and the values are dictionaries defining various predicates.
 
