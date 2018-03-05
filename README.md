@@ -2,7 +2,7 @@
 
 Inferno is a WIP centralized server for managing StackExchange bots. It listens and fetches new or updated SE content (posts, comments, edits...), dispatches HTTP requests to subscribed bots for scanning, posts reports to chat and to the web dashboard using bot-specified templates, and handles chat commands for the bots.
 
-At its core, Inferno is intended to abstract out the chat and API monitoring concerns, so as to provide a way for bots to isolate their post scanning logic and host it in a serverless environment (such as AWS Lambdas) where it can be called as needed to scan posts. Similar to the previous [apicache](https://github.com/SOBotics/apicache), this also cuts down on overall calls since Inferno will retrieve content only once and dispatch it to all subscribers (in addition, this will also leverage Charcoal's doubled API quota key).
+At its core, Inferno is intended to abstract out the chat and API monitoring concerns, so as to provide a way for bots to isolate their post scanning logic and host it in a serverless environment (such as AWS Lambdas) where it can be called as needed to scan posts. Similar to the previous [apicache](https://github.com/SOBotics/apicache), this also cuts down on overall calls since Inferno will retrieve content only once and dispatch it to all subscribers.
 
 ## Bot Interface
 
@@ -97,7 +97,7 @@ To indicate that one or more *answers on the question* should be reported, the r
 
 Each of these classifications should be in the index where the corresponding answer was. Answers are not sent in separate requests -- instead, you get a request containing questions and their answers. This cuts down on the number of times your lambda is called.
 
-In addition to these two critical routes, you may also want to create one or more routes to handle remote chat commands (see `commands` in Bot Configuration). The request structure for these hasn't been designed yet, but they're expected to return plain text Markdown that will be posted as a reply to the command.
+In addition to these two critical routes, you may also want to create one or more routes to handle remote chat commands. See `commands` in Bot Configuration for information on that.
 
 ## Bot Configuration
 
@@ -147,6 +147,9 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
         "<name of command>": {
             "type": "static|local|remote",
             "reply": true|false,
+            "privileged": true|false,
+            "min_arity": 0,
+            "max_arity": 0,
             "data": "..."
         },
         ...
@@ -160,6 +163,11 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
                 "delay": true|false,
                 "delete_fp": true|false
                 "deletionwatcher": true|false,
+                
+                "privileges": [
+                    <user id>,
+                    ...
+                ]
 
                 "conditions": {
                     "<key>": {
@@ -182,7 +190,7 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
 
   - `comments`: This polls the API route `/comments` to retrieve new comments at an allocation-dependent rate (see Allocations). This post type does not support the `"sites": "*"` (all sites) option -- you must specify specific sites.
 
-  - `edits`: This monitors the SE real-time websocket for questions as per `questions`, but if a bumped question or answer was edited, will query the `/posts/{ids}/revisions` route to fetch the latest revision of the post.
+  - `edits`: This monitors the SE real-time websocket for questions as per `questions`, but if a bumped question or answer was edited, it will query the `/posts/{ids}/revisions` route to fetch the latest revision of the post.
 
   - `suggested-edits`: This polls the API route `/suggested-edits` to retrieve new suggested edits at an allocation-dependent rate. This post type does not support the `"sites": "*"` (all sites) option -- you must specify specific sites. Note that many use cases for this post type can also be fulfilled by the `reviews` post type, such as EditMonitor's "accepted by OP with a reject vote" or "1 accept vote and 1 reject vote" -- this should only be used if you need the content of the suggested edit as soon as it is made.
 
@@ -232,9 +240,9 @@ This is (obviously) expected to be in the same order as the original `answers` a
 
 - `types.<type>.query.templates`: A dictionary containing the templates for formatting the reports.
 
-- `types.<type>.query.templates.chat`: Required. A format string defining how your bot's chat message reports will appear: `"%{key} ... %{another key} asdf."` The format string can reference keys contained in either the API response (e.g. `link`), your bot's response (e.g. `reasons`) or a few special ones (e.g. `ms_link` for the dashboard entry). For answers, the "API response" will specifically be the corresponding entry under the `answers` array, not the API response of the question.
+- `types.<type>.query.templates.chat`: Required. A Handlebars template defining how your bot's chat message reports will appear. The format string can reference keys contained in either the API response (e.g. `{{link}}`), your bot's response (e.g. `{{reasons}}`) or a few special ones (e.g. `{{ms_link}}` for the dashboard entry). For answers, the "API response" will specifically be the corresponding entry under the `answers` array, not the API response of the question.
 
-- `types.<type>.query.templates.web`: Optional. A Handlebars template that will be rendered whenever someone views the post on the dashboard. All of the keys available to the chat template will also be available.
+- `types.<type>.query.templates.web`: Optional. A Handlebars template that will be rendered whenever someone views the post on the dashboard. All of the keys available to the chat template will also be available. Additionally, a few other keys will be available, such as `{{autoflaggers}}` (list of names) and `{{reason_accuracies}}` (mapping reason names to their accuracies). List is subject to change.
 
 - `feedbacks`: A dictionary defining the feedbacks this bot accepts, whether from chat or from a userscript. The name of each key should be the name of the corresponding feedback, without any modifiers at the end (e.g. `tp`, not `tpu-`).
 
@@ -244,34 +252,67 @@ This is (obviously) expected to be in the same order as the original `answers` a
 
 - `feedbacks.<feedback>.type`: Required. Defines the semantics of the feedback:
 
-  - "true": A true positive. This is the only type of feedback that will count as a hit for the reason's accuracy. Conflicts with `false`.
-  - "false": A false positive. If the post was autoflagged, this will trigger a chat warning. Conflicts with `true`.
-  - "neutral": Anything else (e.g. SmokeDetector's NAA, Natty's needs edit, ...). This won't cause a warning if the post was autoflagged, nor will it conflict with any other feedbacks.
+  - `"true"`: A true positive. This is the only type of feedback that will count as a hit for the reason's accuracy. Conflicts with `"false"`.
+  - `"false"`: A false positive. If the post was autoflagged, this will trigger a chat warning. Conflicts with `"true"`.
+  - `"neutral"`: Anything else (e.g. SmokeDetector's NAA, Natty's needs edit, ...). This won't cause a warning if the post was autoflagged, nor will it conflict with any other feedbacks.
 
 - `feedbacks.<feedback>.blacklist`: Optional, defaults to `false`. Defines whether the feedback affects the user blacklist. If this is `true`, and *the feedback type* is not `"false"`, then the user who created the post will be added to the blacklist. This means that *any* content they produce will automatically be reported with the reason `Blacklisted user`, regardless of what your bot classifies it as. Note that the post will *still be sent to your bot*, and any information from the scan will be available to the templates (e.g. any additional reasons). If *the feedback type* is of type `"false"`, then this feedback will remove the user from the user blacklist instead.
 
-- `commands`: A dictionary defining the commands that this bot accepts. For reply commands, the name of the key should be a prefix *after* the reply ping (:<numbers>) is stripped. For prefix commands, the key will be a prefix of the entire message. This means that for commands that just involve pinging the bot (not replying to it), you need to include the ping e.g. `@Natty alive`. If you want to allow for a shorter prefix, you can use aliases (e.g. `@nat alive`).
+- `commands`: A dictionary defining the commands that this bot accepts. For reply commands, the name of the key should be a prefix *after* the reply ping (`:<numbers>`) is stripped. For prefix commands, the key will be a prefix of the entire message. This means that for commands that just involve pinging the bot (not replying to it), you need to include the ping e.g. `@Natty alive`. If you want to allow for a shorter prefix, you can use aliases (e.g. `@nat alive`).
 
 - `commands.<command>.type`: Reqiured. Defines the behavior of the command:
   - `"static"`: Replies to the command with the string contained in `"data"`. This is for commands such as `alive` or simple joke commands like `!!/lick`.
 
-  - `"remote"`: Sends the message as a POST request to the URI contained in `"data"`, and replies with the body of the response (in plain text).
+  - `"remote"`: Sends the message as a JSON POST request to the URI contained in `"data"`, and replies with the body of the response (in plain text):
+    - `alias_used` will contain the full name of how the command was invoked (not how the command was defined, in case of aliases).
+    - If the command has a max arity of 1, the key `args` will contain an array with one string containing everything in the message after the command name.
+    - Otherwise, the arguments will be split on spaces like usual and stored in `args`.
+    - The full message data of the message containing the command will be stored in `msg_id`, `msg_content`, `msg_timestamp` `msg_user_id`, `msg_user_name`, `room_host`, `users_in_room`.
+    - If the command is a reply command, the message data for the parent message will be stored in `parent_id`, `parent_content`, `parent_timestamp`.
+    - If the reply command is replying to a report, all of keys in the API response and your bot's response will be available.
 
-  - `"local"`: not designed yet
+  - `"local"`: Renders the Handlebars template contained in `"data"`. The following parameters and helpers will be available to it:
+    - `{{alias_used}}` will contain the full name of how the command was invoked (not how the command was defined, in case of aliases).
+    - If the command has a max arity of 1, everything in the message after the command name will be stored in `{{[1]}}`.
+    - Otherwise, the arguments will be split on spaces like usual and stored in `{{[1]}}`, `{{[2]}}`, ...
+    - The full message data of the message containing the command will be stored in `{{msg_id}}`, `{{msg_content}}`, `{{msg_timestamp}}` `{{msg_user_id}}`, `{{msg_user_name}}`, `{{room_host}}`, `{{users_in_room}}`
+    - If the command is a reply command, the message data for the parent message will be stored in `{{parent_id}}`, `{{parent_content}}`, `{{parent_timestamp}}`.
+    - If the reply command is replying to a report, all of keys in the API response and your bot's response will be available (like the chat report template). Additionally, a few other keys will be available, such as `{{autoflaggers}}` (list of names) and `{{reason_accuracies}}` (mapping reason names to their accuracies). List is subject to change.
+    - The following assorted helpers will be available:
+      - `join <array> <delimiter>`
+      - `match <regex> <string>` (returns list of captures)
+      - `sub <regex> <replacement> <string>`
+      - `delete <msg_id>`
+      - `promote <user_id>`
+      - `unfeedbacked` (returns list of response_datas from Report model)
+      - `posts_by_tag <tag name> <count>`
+      - `posts_between <timestamp 1> <timestamp 2>`
+      - `last_posts <count>`
+      - `random_choice <array>`
+      - `sum <array>`
+      - `add <1> <2>`
+      - `minus <1> <2>`
+      - `mul <1> <2>`
+      - `div <1> <2>`
+    
 
 - `commands.<command>.reply`: If this is `true`, then the command is invoked by replying to one of the bot's messages. The parent message will be included along with the message containing the command itself. Defaults to `false`.
+
+- `commands.<command>.privileged`: If this is `true`, only users with privileges in the current room can invoke this command.
 
 - `commands.<command>.data`: A string. What it contains depends on the type of command.
 
 - `rooms`: A dictionary defining the rooms this bot listens in. This should map the chat host `stackexchange|stackoverflow|meta.stackexchange` to dictionaries that then have the room IDs as keys.
 
-- `rooms.<host>.<room>.commands`: If this is `true`, then Inferno will listen for chat commands in this room. If this is `false`, then only reports will be posted here (commands will not be listened for at all).
+- `rooms.<host>.<room>.commands`: Optional, defaults to false. If this is `true`, then Inferno will listen for chat commands in this room. If this is `false`, then only reports will be posted here (commands will not be listened for at all).
 
-- `rooms.<host>.<room>.delay`: If this is `true`, then Inferno will wait 5 minutes before posting a report to this room. You're expected to do this as a courtesy if you run your bot in the Meta Tavern.
+- `rooms.<host>.<room>.delay`: Optional, defaults to false. If this is `true`, then Inferno will wait 5 minutes before posting a report to this room. You're expected to do this as a courtesy if you run your bot in the Meta Tavern.
 
-- `rooms.<host>.<room>.delete_fp`: If this is `true`, then Inferno will delete reports that are marked as false positives within the message deletion window (2 minutes).
+- `rooms.<host>.<room>.delete_fp`: Optional, defaults to false. If this is `true`, then Inferno will delete reports that are marked as false positives within the message deletion window (2 minutes).
 
-- `rooms.<host>.<room>.deletionwatcher`: If this is `true`, Inferno will listen for when the post reported is deleted and delete the corresponding chat message within the message deletion window (2 minutes).
+- `rooms.<host>.<room>.deletionwatcher`: Optional, defaults to false. If this is `true`, Inferno will listen for when the post reported is deleted and delete the corresponding chat message within the message deletion window (2 minutes).
+
+- `rooms.<host>.<room>.privileges`: Optional. Contains an array of user IDs that can execute privileged commands.
 
 - `rooms.<host>.<room>.conditions`: This is a dictionary defining the conditions under which a post will be reported to this room. The keys represent keys in either the API or bot response (as with the chat template), and the values are dictionaries defining various predicates.
 
@@ -294,12 +335,12 @@ This is (obviously) expected to be in the same order as the original `answers` a
 
 ## Quota Allocation
 
-One of the other features of Inferno is that it "splits" up the total API quota (20,000 requests per day) among the various post types. This can be used to give more/less weight to a given type of post.
+One of the other features of Inferno is that it "splits" up the total API quota (10,000 requests per day) among the various post types. This can be used to give more/less weight to a given type of post.
 
 There are two kinds of post types, and their behavior with respect to the quota allocation varies:
 
 - Polling. This is `comments` and `suggested-edits`, where an API route is queried periodically to fetch new content. The API allocation defines how often the route is queried: for instance, if you allocate 1,000 requests per day to `suggested-edits`, then it will query for suggested edits 1/1,000 days/request * 1440 minutes/day = every 1.44 minutes.
 
-- Enqueuing. This is `questions`, `edits`, and `reviews`, where content comes down a websocket. Rather than fetching the post immediately (which would be a massive waste of quota), posts are *enqueued* and then fetched in a batch once the queue gets to a certain size. To calculate this threshold, Inferno keeps a sliding-window average of the current post per minute rate over the past hour *across the network*. If the current posts per minute is, say, 15 posts/minute (not realistic), and the API allocation for the post type is 12,000 requests/day, then it will query the API once the queue *for a given site* reaches ceil(3 posts/minute / (12,000 requests/day / 1440 minutes/day)) = 2 requests enqueued.
+- Enqueuing. This is `questions`, `edits`, and `reviews`, where content comes down a websocket. Rather than fetching the post immediately (which would be a massive waste of quota), posts are *enqueued* and then fetched in a batch once the queue gets to a certain size. To calculate this threshold, Inferno keeps a sliding-window average of the current post per minute rate over the past hour *across the network*. If the current posts per minute is, say, 15 posts/minute (not realistic), and the API allocation for the post type is 6,000 requests/day, then it will query the API once the queue *for a given site* reaches ceil(15 posts/minute / (6,000 requests/day / 1440 minutes/day)) = 4 requests enqueued.
 
 Note that quota allocation is a global setting, not something that is set per bot.
