@@ -3,9 +3,13 @@
 one:
   bot: one
   name: MyString
-  conflicts: MyString
+  type: 1
+  icon: MyString
+  blacklist: false
 
 two:
   bot: two
   name: MyString
-  conflicts: MyString
+  type: 1
+  icon: MyString
+  blacklist: false

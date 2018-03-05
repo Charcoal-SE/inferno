@@ -3,7 +3,29 @@
 one:
   bot: one
   post_type: one
+  site: one
+  all_sites: false
+  route: MyString
+  request_method: 1
+  route: MyString
+  spam_key: MyString
+  key_type: 1
+  answer_key: MyString
+  min_score: 1
+  chat_template: MyString
+  web_template: MyString
 
 two:
   bot: two
   post_type: two
+  site: two
+  all_sites: false
+  route: MyString
+  request_method: 1
+  route: MyString
+  spam_key: MyString
+  key_type: 1
+  answer_key: MyString
+  min_score: 1
+  chat_template: MyString
+  web_template: MyString

@@ -4,18 +4,10 @@ one:
   user: one
   name: MyString
   token: MyString
-  scan_method: 1
-  route: MyString
-  spam_key: MyString
-  key_type: 1
-  chat_template: MyString
+  auth_route: MyString
 
 two:
   user: two
   name: MyString
   token: MyString
-  scan_method: 1
-  route: MyString
-  spam_key: MyString
-  key_type: 1
-  chat_template: MyString
+  auth_route: MyString

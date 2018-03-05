@@ -5,22 +5,7 @@ require 'rails/all'
 # you've limited to :test, :development, or :production.
 Bundler.require(*Rails.groups)
 
-require_relative '../lib/chat'
-require_relative '../lib/fetcher'
-
 module Inferno
-  def self.start_tasks
-    ppid = redis.getset("thread_ppid", Process.ppid)
-
-    if !ppid || ppid.to_i != Process.ppid
-      Chat.instance.join_rooms
-
-      Thread.new do
-        Fetcher.instance.run
-      end
-    end
-  end
-
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 5.2
@@ -32,7 +17,11 @@ module Inferno
 end
 
 if defined?(Rails::Server)
-  Rails.application.config.after_initialize do
-    Inferno::start_tasks
-  end
+  $redis = Redis.new
+
+  require_relative '../lib/chat'
+  require_relative '../lib/fetcher'
+
+  Chat::instance.join_command_rooms
+  Fetcher::run
 end

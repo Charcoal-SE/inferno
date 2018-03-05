@@ -1,48 +1,90 @@
 require 'set'
-require 'socket'
 
-class Fetcher
-  include Singleton
+class PostStats
+  private
+  attr_accessor :desired_cpm, :current_ppm, :pending_ppm, :ppm_window
 
-  def run
-    @backoff = 0
-    @quota = 0
+  public
+  cattr_accessor :post_types
+  PostStats.post_types = {}
+
+  def initialize(type)
+    update_allocation(type.allocation)
 
     @current_ppm = 0
     @pending_ppm = 0
+    @ppm_window = []
 
-    ppm_window = []
+    PostStats.post_types[type.id] = self
+  end
 
-    uri = URI.parse(self.url)
+  def update_allocation(new_allocation)
+    @desired_cpm = new_allocation / 1440
+  end
 
-    @sock = TCPSocket.new(uri.host, 443)
-    @driver = WebSocket::Driver.client(self)
+  def add_post
+    @pending_ppm += 1
+  end
 
-    @driver.on(:open) do |_| 
-      @driver.write("155-questions-active")
-      #@driver.write("1-review-dashboard-update")
+  def rollover
+    if @ppm_window.size >= 60
+      @ppm_window.unshift
     end
 
-    @driver.on(:message, &method(:on_post))
+    @ppm_window.push @pending_ppm
 
+    @current_ppm = @ppm_window.sum / @ppm_window.size
+    @pending_ppm = 0
+  end
+
+  def threshold
+    return @current_ppm / @desired_cpm
+  end
+
+  def self.rollover
+    PostStats.post_types.each_value(&:rollover)
+  end
+end
+
+class Fetcher < EventMachine::Connection
+  cattr_accessor :fetcher
+
+  Filter = '!)k_3iHEfnikRI4A..IXrGIwdpOt2bdTX268heIMovWXJwZNk.BEPI*R(8AbEt)AkH'
+  ApiKey = 'IAkbitmze4B8KpacUfLqkw(('
+
+  def self.run
     Thread.new do
-      loop do
-        sleep(60)
+      EM.run do
+        EM.connect('qa.sockets.stackexchange.com', 443, Fetcher)
+      end
+    end
+  end
 
-        if ppm_window.size >= 60
-          ppm_wimdow.unshift
-        end
+  def connection_completed
+    start_tls
 
-        ppm_window.push pending_ppm
+    @backoff = 0
+    @quota = 0
+    @api_queue = EM::Queue.new
 
-        @current_ppm = ppm_window.sum / ppm_window.size
-        @pending_ppm = 0
+    @actions = {}
+    @pollers = []
+    @driver = WebSocket::Driver.client(self)
+
+    @driver.on(:open, &method(:reload_subscriptions))
+    @driver.on(:message, &method(:on_msg))
+    @api_queue.pop(&method(:api_fetch))
+
+    EM.add_periodic_timer(60) do
+      PostStats.rollover
+
+      if $redis.getset('reload_subscriptions', 0) == '1'
+        reload_subscriptions(nil)
       end
     end
 
-    loop do
-      @driver.parse(@sock.read(1))
-    end
+    @driver.start
+    Fetcher.fetcher = self
   end
 
   def url
@@ -50,11 +92,121 @@ class Fetcher
   end
 
   def write(data)
-    @sock.write(data)
+    send_data(data)
   end
 
-  def on_post(post)
-    post = JSON.parse(JSON.parse(post)['data'])
+  def receive_data(data)
+    @driver.parse(data)
+  end
+
+  def reload_subscriptions(_)
+    @pollers.each(&:cancel)
+
+    old_actions = []
+
+    @actions.each_key do |action|
+      @actions[action][2] = []
+      old_actions.push action
+    end
+
+    Subscription.all.each do |subscription|
+      type = subscription.post_type
+
+      if type.ws
+        if type.per_site
+          if subscription.all_sites.present?
+            Site.all.each do |site|
+              register_ws_action(site.se_id, subscription)
+            end
+          else
+            register_ws_action(subscription.site.se_id, subscription)
+          end
+        else
+          register_ws_action(155, subscription)
+        end
+      else
+        start_poller(subscription)
+      end
+    end
+
+    old_actions.each do |action|
+      if @actions[action][2] == []
+        @driver.text "-#{action}"
+        @actions.delete action
+      end
+    end
+
+    PostStats.post_types.each do |id, stats|
+      stats.update_allocation PostType.find(id).allocation
+    end
+  end
+
+  def start_poller(subscription)
+    bot_id = subscription.bot.id.to_s
+    site_name = subscription.site.name
+    route = subscription.post_type.route
+
+    last_date = Time.now.to_i
+    period = 86400 / subscription.post_type.allocation
+    interface_id = subscription.id
+
+    @pollers << EM.add_periodic_timer(period) do
+      @api_queue.push([route, site_name, "?order=desc&fromdate=#{last_date}&sort=creation&pagesize=100", ->(data, parsed) do
+        last_date = parsed["items"][-1]["creation_date"]
+
+        if !Subscription.interfaces.has_key?(interface_id) || $redis.getset(bot_id, 0) == '1'
+          EM.defer(->() do subscription.build_interface end, ->(_) do
+            Subscription.interfaces[interface_id].api(data, parsed)
+          end)
+        else
+          Subscription.interfaces[interface_id].api(data, parsed)
+        end
+      end])
+    end
+  end
+
+  def register_ws_action(site_id, subscription)
+    action = "#{site_id}-#{subscription.post_type.ws}"
+    type = subscription.post_type
+
+    route = type.route
+
+    if !PostStats.post_types.has_key?(type.id)
+      PostStats.new type
+    end
+
+    stats = PostStats.post_types[type.id]
+
+    if !@actions.has_key? action
+      @driver.text action
+      @actions[action] = [route, stats, []]
+    end
+
+    bot_id = subscription.bot.id.to_s
+    interface_id = subscription.id
+
+    @actions[action][2].push [bot_id, interface_id, subscription]
+  end
+
+  def on_msg(post)
+    post = JSON.parse(post.data)
+
+    action = post['action']
+
+    if action == 'hb'
+      return @driver.text('hb')
+    else
+      action_data = @actions[action]
+
+      if action_data
+        data = JSON.parse(post['data'])
+        enqueue(data, action_data)
+      end
+    end
+  end
+
+  def enqueue(data, action_data)
+    route, stats, callbacks = action_data
 
     id = post['id']
     site_name = post['siteBaseHostAddress']
@@ -65,12 +217,12 @@ class Fetcher
 
     key = site_name + '-posts'
 
-    redis.sadd(key, id)
-    @pending_ppm += 1
+    $redis.sadd(key, id)
+    stats.add_post
 
-    if redis.scard(key) > @current_ppm / (PostTypes.find(:posts).quota / 1440)
-      posts = Set.new redis.smembers(key)
-      redis.del(key)
+    if $redis.scard(key) > stats.threshold
+      posts = Set.new $redis.smembers(key)
+      $redis.del(key)
 
       site = Site.find_or_create_by(:name => site_name)
 
@@ -90,65 +242,66 @@ class Fetcher
         posts.union (current_max_id - diff .. current_max_id - 1)
       end
 
-      items = fetch_posts(site_name, posts)
+      @api_queue.push([route, site_name, posts.join(';'), ->(items, parsed) do
+        items.chop!
 
-      if items then
-        items = items[:-1]
+        callbacks.each do |callback|
+          bot_id, interface_id, handle = callback
 
-        Subscription.where(:post_type => :posts).each do |subscription|
-          bot = subscription.bot
-
-          if redis.getset(bot.id.to_s, 0) == '1'
-            bot.rebuild_interface
+          if !Subscription.interfaces.has_key?(interface_id) || $redis.getset(bot_id, 0) == '1'
+            EM.defer(->() do handle.build_interface end, ->(_) do
+              Subscription.interfaces[interface_id].api(post, parsed)
+            end)
+          else
+            Subscription.interfaces[interface_id].api(post, parsed)
           end
-
-          Bot.bot_interfaces[bot.id].api("#{items[:-1]},'token':'#{bot.token}'}")
         end
-      end
+      end])
     end
   end
 
-  def fetch_posts(site, ids, json = false)
+  def api_fetch(item)
     remaining_backoff = @backoff - Time.now.to_i
 
-    if @remaining_backoff > 0 then
-      sleep(remaining_backoff + 1)
+    if remaining_backoff > 0 then
+      EM.add_timer(remaining_backoff + 1) do api_fetch(item) end
+      return
     end
 
-    ids = ids.join ';'
+    route, site, data, callback = item
 
-    request_uri = "https://api.stackexchange.com/2.2/question/#{ids}?site=#{site}"
-                  "&filter=!)E0g*ODaEZ(SgULQhYvCYbu09*ss(bKFdnTrGmGUxnqPptuHP&key=IAkbitmze4B8KpacUfLqkw(("
+    request_uri = "https://api.stackexchange.com/2.2#{route}/#{data}"
+    http = EM::HttpRequest.new(request_uri).get :query => {:site => site, :filter => Filter, :key => ApiKey}
 
-    result = Net::HTTP.get(request_uri)
+    http.callback do
+      result = http.response
+      parsed = JSON.parse result
 
-    parsed = JSON.parse result
+      if parsed['backoff']
+        new_backoff = Time.now.to_i + parsed['backoff']
 
-    if !parsed['items'] then
-      logger.info "No items returned for #{ids}"
-      return nil
-    end
-
-    if parsed['backoff'] then
-      new_backoff = Time.now.to_i + parsed['backoff']
-
-      if new_backoff > @backoff then
-        @backoff = new_backoff
+        if new_backoff > @backoff
+          @backoff = new_backoff
+        end
       end
-    end
 
-    if parsed['error_msg'] then
-      logger.info "API error for #{ids}: #{parsed['error_msg']}"
+      if parsed['error_message']
+        Rails.logger.info "API error for #{route}, #{data}: #{parsed['error_message']}"
 
-      if parsed['error_id'] == 502 then
-        @backoff = Time.now.to_i + 11
+        if parsed['error_id'] == 502
+          @backoff = Time.now.to_i + 11
+        end
       end
-    end
 
-    if parsed['quota_remaining'] then
-      @quota = parsed['quota_remaining']
-    end
+      if parsed['quota_remaining']
+        @quota = parsed['quota_remaining']
+      end
 
-    return json ? parsed : result
+      if parsed['items']&.present?
+        callback.call(result, parsed)
+      end
+
+      @api_queue.pop(&method(:api_fetch))
+    end
   end
 end

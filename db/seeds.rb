@@ -5,3 +5,6 @@
 #
 #   movies = Movie.create([{ name: 'Star Wars' }, { name: 'Lord of the Rings' }])
 #   Character.create(name: 'Luke', movie: movies.first)
+
+#PostType.create(:name => 'questions', :ws => 'questions-active', :route => '/questions', :allocation => 7000)
+PostType.create(:name => 'comments', :ws => nil, :route => '/comments', :allocation => 3000)

@@ -1,9 +1,11 @@
 # Read about fixtures at http://api.rubyonrails.org/classes/ActiveRecord/FixtureSet.html
 
 one:
-  domain: MyString
+  name: MyString
   last_scanned: 1
+  se_id: 1
 
 two:
-  domain: MyString
+  name: MyString
   last_scanned: 1
+  se_id: 1

@@ -2,6 +2,12 @@
 
 one:
   name: MyString
+  ws: MyString
+  route: MyString
+  allocation: 1
 
 two:
   name: MyString
+  ws: MyString
+  route: MyString
+  allocation: 1

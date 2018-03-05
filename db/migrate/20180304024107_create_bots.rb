@@ -4,11 +4,7 @@ class CreateBots < ActiveRecord::Migration[5.2]
       t.references :user, foreign_key: true
       t.string :name
       t.string :token
-      t.integer :scan_method
-      t.string :route
-      t.string :spam_key
-      t.integer :key_type
-      t.string :chat_template
+      t.string :auth_route
 
       t.timestamps
     end

@@ -1,5 +1,5 @@
 class Command < ApplicationRecord
   belongs_to :bot
 
-  enum command_types: [:static, :local, :remote_get, :remote_post]
+  enum :type => [:static, :local, :remote]
 end

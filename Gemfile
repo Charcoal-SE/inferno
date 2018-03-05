@@ -3,10 +3,16 @@ git_source(:gitlab) { |repo| "https://gitlab.com/#{repo}.git" }
 
 ruby '2.3.1'
 
+## Additional Inferno dependencies
 gem 'chatx', gitlab: 'izwick-schachter/ChatX'
 gem 'devise'
+gem 'eventmachine'
+gem 'em-http-request'
+gem 'nokogiri'
+gem 'ruby-handlebars'
 gem 'websocket-driver'
 
+## Default Rails stuff
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
 gem 'rails', '~> 5.2.0.beta2'
 # Use sqlite3 as the database for Active Record

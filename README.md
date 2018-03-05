@@ -12,31 +12,15 @@ Your bots are expected to implement at minimum 2 routes:
 
 ```
 {
-    "stackexchange": {
-        "cookie": "...",
-        "fkey": "...",
-        "id": "...,
-    },
-
-    "stackoverflow": {
-        "cookie": "...",
-        "fkey": "...",
-        "id": "...,
-    },
-
-    "meta.stackexchange": {
-        "cookie": "...",
-        "fkey": "...",
-        "id": "...,
-    },
+    "stackexchange": "...",
+    "stackoverflow": "...",
+    "meta.stackexchange": "..."
 }
 ```
 
-  - `"cookie"`: contains the contents of the `sechatusr` cookie, which is given to you after you log in to the given chat host.
-  - `"fkey"`: contains the `fkey` for the given host (traditionally retrieved from `/chats/join/favorite`, which also contains `"id"`)
-  - `"id"` : contains the bot's user ID for the given host.
+where each key contains the contents of the `acct` cookie, which is given to you after you log in to the given chat host.
 
-In effect, this allows Inferno to post messages on your bot's behalf without actually having its password. If Inferno was ever compromised, a mod could simply invalidate the bot's sessions.
+In effect, this allows Inferno to post messages on your bot's behalf without actually having its password. If Inferno was ever compromised, any mod could simply invalidate the bot's sessions.
 
 - The scan route (`"types.<type>.query.route"`). This is the actual important route: it takes a dictionary containing API responses like so:
 
