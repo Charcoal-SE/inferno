@@ -194,7 +194,7 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
 
   - `suggested-edits`: This polls the API route `/suggested-edits` to retrieve new suggested edits at an allocation-dependent rate. This post type does not support the `"sites": "*"` (all sites) option -- you must specify specific sites. Note that many use cases for this post type can also be fulfilled by the `reviews` post type, such as EditMonitor's "accepted by OP with a reject vote" or "1 accept vote and 1 reject vote" -- this should only be used if you need the content of the suggested edit as soon as it is made.
 
-  - `reviews`: This monitors the SE real-time websocket (`<site>-review-dashboard-update`) and reports all reviews made; this does **not** mean that it reports when a post enters a review queue, but rather when a user perform a review. Currently this will report on reviews made in any review queue; this may be changed. This post type also does not support the `"sites": "*"` (all sites) option -- this may change in the future.
+  - `reviews`: This monitors the SE real-time websocket (`<site>-review-dashboard-update`) and reports all reviews made; this does **not** mean that it reports when a post enters a review queue, but rather when a user perform a review. Currently this will report on reviews made in any review queue; this may be changed.
 
 - `types.<type>.sites`: This can either be the string `"*"` for all sites, or an array of site names to monitor. Only `questions` and `edits` support `"*"`. Defaults to `"*"` for `questions` and `edits`, and to `["stackoverflow.com"]` for everything else.
 
