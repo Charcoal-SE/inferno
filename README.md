@@ -196,7 +196,7 @@ Aside from dedicated Inferno routes for modifying specific parts of a bot's conf
 
   - `reviews`: This monitors the SE real-time websocket (`<site>-review-dashboard-update`) and reports all reviews made; this does **not** mean that it reports when a post enters a review queue, but rather when a user perform a review. Currently this will report on reviews made in any review queue; this may be changed.
 
-- `types.<type>.sites`: This can either be the string `"*"` for all sites, or an array of site names to monitor. Only `questions` and `edits` support `"*"`. Defaults to `"*"` for `questions` and `edits`, and to `["stackoverflow.com"]` for everything else.
+- `types.<type>.sites`: This can either be the string `"*"` for all sites, or an array of site names to monitor. Only non-polling post types (`questions`, `edits` and `reviews`) support `"*"`. Defaults to `"*"` for `questions`, `edits` or `reviews`, and to `["stackoverflow.com"]` for everything else.
 
 - `types.<type>.query`: A dictionary containing information on where to send the reports to for scanning.
 
